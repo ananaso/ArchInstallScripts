@@ -7,18 +7,19 @@
 #hostname=$(dialog --stdout --inputbox "Enter hostname" 0 0) || exit 1
 #: ${hostname:?"non-empty value must be entered"}
 
+echo
 partitionsCorrect=false
 until [ "$partitionsCorrect" = true ]
 do
     # Get list of available partitions
-    readarray -t rawLsblk < <(lsblk -nlo NAME,SIZE,TYPE,MOUNTPOINT | awk '/part/')
+    readarray -t rawLsblk < <(lsblk -nlo NAME,SIZE,MOUNTPOINT,TYPE | awk '/part/')
     COLUMNS=0 # ensure each option is printed on its own line
 
     # Ask for root partition
     PS3='Select root partition: '
     select partition in "${rawLsblk[@]}"
     do
-        [[ -n $partition ]] || { echo "Invalid choice. Please try again." >&2; continue; }
+        [[ -n $partition ]] || { echo "Invalid choice. Please try again." >&2; echo; continue; }
         break # valid choice was made; exit prompt.
     done
     echo
