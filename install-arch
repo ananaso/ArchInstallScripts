@@ -12,7 +12,7 @@ partitionsCorrect=false
 until [ "$partitionsCorrect" = true ]
 do
     # Get list of available partitions
-    readarray -t rawLsblk < <(lsblk -nlo NAME,SIZE,MOUNTPOINT,TYPE | awk '/part/')
+    readarray -t rawLsblk < <(lsblk -nlo NAME,SIZE,MOUNTPOINT,TYPE | awk '/part/ {gsub(/part$/,""); print}')
     COLUMNS=0 # ensure each option is printed on its own line
 
     # Ask for root partition
