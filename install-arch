@@ -1,16 +1,60 @@
 #!/usr/bin/env bash
 
-# Update the system clock
-#timedatectl set-ntp true
+# SAFE_EXECUTE flag enables non-destructive script execution, primarily for
+# debug purposes.
+SAFE_EXECUTE=true
 
-# Get hostname
-#hostname=$(dialog --stdout --inputbox "Enter hostname" 0 0) || exit 1
-#: ${hostname:?"non-empty value must be entered"}
+### FUNCTIONS ###
+function ynGate {
+    validYN=false
+    until [ "$validYN" = true ]
+    do
+        read -p "Continue? [Y/N] " yn
+        case $yn in
+            [Yy]|[Yy][Ee][Ss] ) validYN=true; yn="yes";;
+            [Nn]|[Nn][Oo] ) validYN=true; yn="no";;
+            * ) echo "Please enter Y/YES or N/NO.";;
+        esac
+    done
+}
+#################
 
+
+# Double check with user to ensure SAFE_EXECUTE is in correct state
 echo
+if [ "$SAFE_EXECUTE" = true ]
+then
+    echo "SAFE_EXECUTE is enabled. Script will execute non-destructively."
+else
+    echo "WARNING: SAFE_EXECUTE is disabled. Script will execute destructively."
+    ynGate
+    if [ "$yn" = "no" ]
+    then
+        exit
+    fi
+fi
+
+## Update the system clock
+echo
+echo "Updating the system clock..."
+if [ "$SAFE_EXECUTE" = true ]
+then
+    echo "SAFE_EXECUTE: timedatectl set-ntp true"
+else
+    timedatectl set-ntp true
+fi
+
+## Partition the disks
+#echo
+#echo "Current disks available:"
+#sudo fdisk -l
+
+
+## Format the partitions
 partitionsCorrect=false
 until [ "$partitionsCorrect" = true ]
 do
+    echo
     # Get list of available partitions
     readarray -t rawLsblk < <(lsblk -nlo NAME,SIZE,MOUNTPOINT,TYPE | awk '/part/ {gsub(/part$/,""); print}')
     COLUMNS=0 # ensure each option is printed on its own line
@@ -19,31 +63,39 @@ do
     PS3='Select root partition: '
     select partition in "${rawLsblk[@]}"
     do
-        [[ -n $partition ]] || { echo "Invalid choice. Please try again." >&2; echo; continue; }
+        [[ -n $partition ]] || { echo "Invalid choice. Please try again." >&2; continue; }
         break # valid choice was made; exit prompt.
     done
+    rootPartition=$partition
     echo
-
-    # Isolate root partition name
-    rootPartition=$(echo $partition | cut -d ' ' -f1)
 
     # Ask for swap partition
     PS3='Select swap partition: '
     select partition in "${rawLsblk[@]}"
     do
-        ([[ -n $partition ]] || { echo "Invalid choice. Please try again." >&2; continue; }) && ([[ $partition != $rootPartition ]] || { echo "Partition already chosen to be root. Please try again." >&2; continue; })
+        [[ -n $partition ]] ||\
+            { echo "Invalid choice. Please try again." >&2; continue; }
+        [[ $partition != $rootPartition ]] ||\
+            { echo "Partition already chosen to be root partition. Please try again." >&2; continue; }
         break # valid choice was made; exit prompt.
     done
     echo
-    
-    # Isolate swap partition name
+
+    # Isolate partition names
+    rootPartition=$(echo $rootPartition | cut -d ' ' -f1)
     swapPartition=$(echo $partition | cut -d ' ' -f1)
 
-    partitionsCorrect=true
-
+    # Check that user is satisfied with selections
+    echo "Chosen partitioning configuartion:"
+    echo "Root=/dev/""$rootPartition"
+    echo "Swap=/dev/""$swapPartition"
+    ynGate
+    if [ "$yn" = "yes" ]
+    then
+        partitionsCorrect=true
+    fi
 done
 
-# Get root and swap partitions
-#partitionRoot=$(dialog --stdout --treeview "Select a root partition" 0 0 0 "$partitionTags") || exit 1
-#: ${paritionRoot:?"non-empty value must be entered"}
-#echo $partitionRoot
+# Get hostname
+#hostname=$(dialog --stdout --inputbox "Enter hostname" 0 0) || exit 1
+#: ${hostname:?"non-empty value must be entered"}
